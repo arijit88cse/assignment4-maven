@@ -1,6 +1,5 @@
 /**
- * Sanders & Fresco CI/CD Pipeline for Maven WebApp
- * Executes stages: Compile, Code Review, Unit Test, Package, Deploy.
+ * Sanders & Fresco CI/CD Pipeline for Maven WebApp (Optimized for OpenJDK 21 Headless JRE Runtime)
  */
 pipeline {
     agent any
@@ -12,24 +11,25 @@ pipeline {
         TOMCAT_CREDENTIALS_ID = 'tomcat-creds'
         APP_CONTEXT_PATH = '/assignment4-maven'
 
-        // SonarQube Configuration (using the exact Jenkins configuration name)
+        // SonarQube Configuration
         SONAR_HOST_URL = 'http://172.31.45.21:9000'
-        SONAR_SERVER_NAME = 'SonarQube Server' // <-- Matches your specified server name
+        SONAR_SERVER_NAME = 'SonarQube Server'
         
         MAVEN_OPTS = "-Dmaven.test.failure.ignore=true"
     }
 
     // Define the tool names configured in Manage Jenkins -> Tools
     tools {
+        // Use the full JDK for compilation and testing
         jdk 'JDK-21' 
         maven 'M3' 
     }
 
     stages {
-        // 1. JIRA JOB: COMPILE (Combined with preparation)
+        // 1. JIRA JOB: COMPILE 
         stage('Compile & Prepare') {
             steps {
-                echo 'Stage 1: Compiling source code and preparing build environment...'
+                echo 'Stage 1: Compiling source code and preparing build environment using JDK-21...'
                 sh 'mvn clean verify -DskipTests=true'
             }
         }
@@ -38,7 +38,6 @@ pipeline {
         stage('Code Review (Sonar)') {
             steps {
                 echo 'Stage 2: Starting SonarQube Code Analysis on port 9000...'
-                // The 'withSonarQubeEnv' block injects the server details
                 withSonarQubeEnv(SONAR_SERVER_NAME) {
                     sh "mvn sonar:sonar -Dsonar.projectKey=${project.artifactId} -Dsonar.host.url=${SONAR_HOST_URL}"
                 }
@@ -82,13 +81,14 @@ pipeline {
                                                    usernameVariable: 'TOMCAT_USERNAME')]) {
                     
                     // Deploy command using the Tomcat Maven Plugin
+                    // The Tomcat server itself uses the OpenJDK 21 Headless JRE to run the WAR.
                     sh "mvn org.apache.tomcat.maven:tomcat7-maven-plugin:2.2:deploy " +
                        "-Durl=${TOMCAT_URL} " +
                        "-Dpath=${APP_CONTEXT_PATH} " +
                        "-Dusername=${TOMCAT_USERNAME} " +
                        "-Dpassword=${TOMCAT_PASSWORD}"
                 }
-                echo "Deployment complete. Check your application at: http://172.31.45.21:9080${APP_CONTEXT_PATH}"
+                echo "Deployment complete. Application available at: http://172.31.45.21:9080${APP_CONTEXT_PATH}"
             }
         }
     }
