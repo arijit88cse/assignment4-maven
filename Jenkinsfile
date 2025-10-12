@@ -27,6 +27,14 @@ pipeline {
 
     stages {
         // 1. JIRA JOB: COMPILE 
+        stage('Debug Environment') {
+            steps {
+                sh 'echo $JAVA_HOME'
+                sh 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64'
+                sh 'echo $JAVA_HOME'
+                sh 'ls -ld $JAVA_HOME/lib/tools.jar' // This file exists only in a JDK, not a JRE.
+            }
+        }
         stage('Compile & Prepare') {
             steps {
                 echo 'Stage 1: Compiling source code and preparing build environment using JDK-21...'
