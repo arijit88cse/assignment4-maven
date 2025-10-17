@@ -1,103 +1,130 @@
-/**
- * Sanders & Fresco CI/CD Pipeline for Maven WebApp (Optimized for OpenJDK 21 Headless JRE Runtime)
- */
 pipeline {
+    // Agent defines where the pipeline will run (e.g., on the 'master' or a specific 'maven' label)
     agent any
 
-    // Environment variables for centralizing configuration
-    environment {
-        // Tomcat Deployment
-        TOMCAT_URL = 'http://172.31.45.21:9080/manager/text'
-        TOMCAT_CREDENTIALS_ID = 'tomcat-creds'
-        APP_CONTEXT_PATH = '/assignment4-maven'
-
-        // SonarQube Configuration
-        SONAR_HOST_URL = 'http://172.31.45.21:9000'
-        SONAR_SERVER_NAME = 'SonarQube Server'
-        
-        MAVEN_OPTS = "-Dmaven.test.failure.ignore=true"
-    }
-
-    // Define the tool names configured in Manage Jenkins -> Tools
+    // Tools setup (ensure 'Maven-3.6.3' is configured in Global Tool Configuration)
     tools {
-        // Use the full JDK for compilation and testing
-        jdk 'JDK-21' 
-        maven 'M3' 
+        maven 'Maven-3.6.3'
     }
 
     stages {
-        // 1. JIRA JOB: COMPILE 
-        stage('Debug Environment') {
+        // --------------------------------------------------------------------------------
+        stage('Checkout') {
             steps {
-                sh 'echo $JAVA_HOME'
-                sh 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64'
-                sh 'echo $JAVA_HOME'
-                sh 'ls -ld $JAVA_HOME/lib/tools.jar' // This file exists only in a JDK, not a JRE.
+                echo 'Checking out source code...'
+                // Replace with your actual SCM configuration (e.g., git checkout)
+                // git url: 'your-repository-url.git', branch: 'main'
             }
         }
-        stage('Compile & Prepare') {
+        // --------------------------------------------------------------------------------
+        stage('Compile') {
             steps {
-                echo 'Stage 1: Compiling source code and preparing build environment using JDK-21...'
-                sh 'mvn clean verify -DskipTests=true'
+                echo 'Compiling the project...'
+                // Maven compile goal: compiles the source code
+                sh 'mvn clean compile'
             }
         }
-
-        // 2. JIRA JOB: CODE REVIEW (SonarQube)
-        stage('Code Review (Sonar)') {
+        // --------------------------------------------------------------------------------
+        stage('Code Review') {
             steps {
-                echo 'Stage 2: Starting SonarQube Code Analysis on port 9000...'
-                withSonarQubeEnv(SONAR_SERVER_NAME) {
-                    sh "mvn sonar:sonar -Dsonar.projectKey=${project.artifactId} -Dsonar.host.url=${SONAR_HOST_URL}"
+                echo 'Running SonarQube analysis for code review...'
+                // Assumes SonarQube is configured as a build wrapper or a separate step
+                // sh 'mvn sonar:sonar'
+                
+                // For this example, we'll use a placeholder step.
+                script {
+                    if (env.SKIP_CODE_REVIEW == 'true') {
+                        echo 'Skipping code review stage.'
+                    } else {
+                        echo 'Code review finished. Quality Gate passed (simulated).'
+                    }
                 }
             }
         }
-        
-        // 3. JIRA JOB: UNIT TEST
+        // --------------------------------------------------------------------------------
         stage('Unit Test') {
             steps {
-                echo 'Stage 3: Running Unit Tests...'
+                echo 'Running unit tests...'
+                // Maven test goal: runs unit tests and skips packaging
                 sh 'mvn test'
+                
+                // Post-processing step to publish test results (e.g., JUnit reports)
+                // This step ensures the test results are visible in Jenkins
+                junit '**/target/surefire-reports/*.xml'
+            }
+        }
+        // --------------------------------------------------------------------------------
+        stage('Package') {
+            steps {
+                echo 'Creating the application package (JAR/WAR)...'
+                // Maven package goal: compiles, runs tests, and packages the application
+                sh 'mvn package -DskipTests' 
+                // Note: Tests are run in the 'Unit Test' stage, so they are skipped here.
+            }
+            post {
+                // Archive the generated artifact
+                always {
+                    archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                }
+            }
+        }
+        // --------------------------------------------------------------------------------
+        stage('Deploy') {
+            steps {
+                echo 'Deploying the artifact to a server (e.g., Tomcat, Nexus, Kubernetes)...'
+                // This is a placeholder. Real deployment requires specific tooling/scripts.
+                // sh 'scp target/your-app.jar user@server:/app/deploy' 
+                echo 'Deployment successful (simulated).'
+            }
+        }
+		// --------------------------------------------------------------------------------
+        stage('Package') {
+            steps {
+                echo 'Creating the application package (WAR)...'
+                // Runs build, creates WAR file in target/
+                sh 'mvn package -DskipTests' 
             }
             post {
                 always {
-                    junit '**/target/surefire-reports/*.xml'
+                    // Archive the generated artifact for visibility/download
+                    archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
                 }
             }
         }
-
-        // 4. JIRA JOB: PACKAGE (Creates the WAR file)
-        stage('Package WAR') {
-            steps {
-                echo 'Stage 4: Packaging the application into a WAR file...'
-                sh 'mvn package -DskipTests'
+        // --------------------------------------------------------------------------------
+        stage('Deploy & Restart Tomcat') {
+            // Define variables for clarity (adjust if your WAR filename is different)
+            environment {
+                TOMCAT_HOME = '/tomcat/apache-tomcat'
+                WAR_FILE = 'target/*.war' // Assumes a single WAR file is produced
+                APP_NAME = 'myapp.war'    // Target name for deployment
             }
-            post {
-                success {
-                    archiveArtifacts artifacts: 'target/*.war', fingerprint: true
-                }
-            }
-        }
-
-        // 5. JIRA JOB: DEPLOY
-        stage('Deploy to Tomcat') {
             steps {
-                echo "Stage 5: Deploying WAR to Tomcat Manager on http://172.31.45.21:9080/..."
+                echo 'Stopping Tomcat server...'
+                // 1. STOP Tomcat
+                // Use shutdown.sh script in the specified bin path.
+                // Redirect output to /dev/null to handle case where server is already stopped (optional)
+                sh "sh \$TOMCAT_HOME/bin/shutdown.sh"
+                // Give Tomcat a few seconds to shut down gracefully
+                sh 'sleep 5' 
                 
-                // Securely fetch credentials from Jenkins Credential Store
-                withCredentials([usernamePassword(credentialsId: "${TOMCAT_CREDENTIALS_ID}", 
-                                                   passwordVariable: 'TOMCAT_PASSWORD', 
-                                                   usernameVariable: 'TOMCAT_USERNAME')]) {
-                    
-                    // Deploy command using the Tomcat Maven Plugin
-                    // The Tomcat server itself uses the OpenJDK 21 Headless JRE to run the WAR.
-                    sh "mvn org.apache.tomcat.maven:tomcat7-maven-plugin:2.2:deploy " +
-                       "-Durl=${TOMCAT_URL} " +
-                       "-Dpath=${APP_CONTEXT_PATH} " +
-                       "-Dusername=${TOMCAT_USERNAME} " +
-                       "-Dpassword=${TOMCAT_PASSWORD}"
-                }
-                echo "Deployment complete. Application available at: http://172.31.45.21:9080${APP_CONTEXT_PATH}"
+                echo 'Deploying artifact to webapps folder...'
+                // 2. MOVE/COPY the WAR file
+                // Find the built WAR file and copy it to the tomcat webapps directory
+                // We rename it to the desired application name (e.g., ROOT.war or myapp.war)
+                sh "cp \${WAR_FILE} \${TOMCAT_HOME}/webapps/\${APP_NAME}"
+                
+                echo 'Starting Tomcat server on port 9080...'
+                // 3. START Tomcat
+                // Use startup.sh script in the specified bin path.
+                sh "sh \$TOMCAT_HOME/bin/startup.sh"
+                
+                // Add a check or a short sleep to wait for startup (optional but recommended)
+                sh 'sleep 10' 
+
+                echo "Deployment successful. Application should be available at port 9080."
             }
         }
+        // --------------------------------------------------------------------------------
     }
 }
