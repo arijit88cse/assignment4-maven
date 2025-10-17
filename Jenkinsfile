@@ -13,7 +13,7 @@ pipeline {
             steps {
                 echo 'Checking out source code...'
                 // Replace with your actual SCM configuration (e.g., git checkout)
-                // git url: 'your-repository-url.git', branch: 'main'
+                // git url: 'https://github.com/arijit88cse/assignment4-maven.git', branch: 'main'
             }
         }
         // --------------------------------------------------------------------------------
@@ -48,9 +48,6 @@ pipeline {
                 // Maven test goal: runs unit tests and skips packaging
                 sh 'mvn test'
                 
-                // Post-processing step to publish test results (e.g., JUnit reports)
-                // This step ensures the test results are visible in Jenkins
-                junit '**/target/surefire-reports/*.xml'
             }
         }
         // --------------------------------------------------------------------------------
